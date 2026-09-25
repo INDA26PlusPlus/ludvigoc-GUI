@@ -8,17 +8,45 @@ const SQUARE_SIZE: f32 = 70.0;
 
 struct MainState {
     board: Board,
+    selected_square: Option<usize>,
 }
 
 impl MainState {
     fn new(board: Board) -> GameResult<MainState> {
-        let s = MainState { board };
+        let s = MainState { board, selected_square: None };
         Ok(s)
     }
 }
 
 impl event::EventHandler for MainState{
     fn update(&mut self, _ctx: &mut Context) -> GameResult {
+        Ok(())
+    }
+
+    fn mouse_button_down_event(
+        &mut self,
+        _ctx: &mut Context,
+        button: ggez::input::mouse::MouseButton,
+        x: f32,
+        y: f32,
+    ) -> GameResult {
+
+        if button == ggez::input::mouse::MouseButton::Left {
+            let kolumn = 7 - (x / SQUARE_SIZE) as usize;
+            let rad = 7 - (y / SQUARE_SIZE) as usize;
+            let ruta = rad * 8 + kolumn;
+
+            match self.selected_square {
+                None => {
+                    self.selected_square = Some(ruta);
+                }
+                Some(from) => {
+                    self.board.move_piece(from as usize, ruta as u64, None);
+                    self.selected_square = None;
+                }
+            }
+        }
+
         Ok(())
     }
 
