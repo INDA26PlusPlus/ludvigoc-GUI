@@ -9,11 +9,12 @@ const SQUARE_SIZE: f32 = 70.0;
 struct MainState {
     board: Board,
     selected_square: Option<usize>,
+    winner: Option<&'static str>,
 }
 
 impl MainState {
     fn new(board: Board) -> GameResult<MainState> {
-        let s = MainState { board, selected_square: None };
+        let s = MainState { board, selected_square: None, winner: None };
         Ok(s)
     }
 }
@@ -43,6 +44,14 @@ impl event::EventHandler for MainState{
                 Some(from) => {
                     self.board.move_piece(from as usize, ruta as u64, None);
                     self.selected_square = None;
+
+                    if Board::is_mate_white(&self.board) {
+                        self.winner = Some("Svart vann!");
+                    }
+
+                    if Board::is_mate_black(&self.board) {
+                        self.winner = Some("Vit vann!");
+                    }
                 }
             }
         }
@@ -115,6 +124,17 @@ impl event::EventHandler for MainState{
                         .color(Color::RED),
                 );
             }
+        }
+
+        if let Some(winner) = self.winner {
+            let text = graphics::Text::new(winner);
+
+            canvas.draw(
+                &text,
+                graphics::DrawParam::default()
+                    .dest(Vec2::new(250.0, 250.0))
+                    .color(Color::RED),
+            );
         }
 
         canvas.finish(ctx)?;
