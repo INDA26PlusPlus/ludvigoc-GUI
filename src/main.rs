@@ -1,3 +1,5 @@
+mod network;
+
 use ggez::event;
 use ggez::graphics::{self, Color, Rect};
 use ggez::{Context, GameResult};
@@ -143,6 +145,19 @@ impl event::EventHandler for MainState{
 }
 
 pub fn main() -> GameResult {
+
+    let args: Vec<String> = std::env::args().collect();
+
+    if args.len() < 2 {
+        println!("Använd --server eller --client");
+        return Ok(());
+    }
+
+    if args[1] == "--server" {
+        network::start_server();
+    } else if args[1] == "--client" {
+        network::connect_to_server();
+    }
 
     let initial_boards: [u64; 12] = [0; 12];
 
