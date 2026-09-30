@@ -148,15 +148,17 @@ pub fn main() -> GameResult {
 
     let args: Vec<String> = std::env::args().collect();
 
-    if args.len() < 2 {
-        println!("Använd --server eller --client");
+    if args.len() < 3 {
+        println!("use --server or --client and chose color (W or B)");
         return Ok(());
     }
 
+    let color = args[2].chars().nth(0).unwrap_or('W');
+
     let stream = if args[1] == "--server" {
-        network::start_server()
+        network::start_server(color)
     } else if args[1] == "--client" {
-        network::connect_to_server()
+        network::connect_to_server(color)
     } else {
         println!("Använd --server eller --client");
         return Ok(());
