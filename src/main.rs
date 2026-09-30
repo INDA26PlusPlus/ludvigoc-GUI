@@ -153,11 +153,14 @@ pub fn main() -> GameResult {
         return Ok(());
     }
 
-    if args[1] == "--server" {
-        network::start_server();
+    let stream = if args[1] == "--server" {
+        network::start_server()
     } else if args[1] == "--client" {
-        network::connect_to_server();
-    }
+        network::connect_to_server()
+    } else {
+        println!("Använd --server eller --client");
+        return Ok(());
+    };
 
     let initial_boards: [u64; 12] = [0; 12];
 
