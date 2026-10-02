@@ -30,7 +30,26 @@ impl MainState {
         Ok(s)
     }
 
-    fn send_move(&mut self, from: usize, to: usize) {
+    fn send_move(&mut self, from: usize, to: usize, promotion: Option<char>) {
+
+        let mut new_board = Board {
+            boards: self.board.boards,
+            w_enpesant: self.board.w_enpesant,
+            b_enpesant: self.board.b_enpesant,
+
+            w_l_rook_moved: self.board.w_l_rook_moved,
+            w_r_rook_moved: self.board.w_r_rook_moved,
+            w_k_moved: self.board.w_k_moved,
+
+            b_l_rook_moved: self.board.b_l_rook_moved,
+            b_r_rook_moved: self.board.b_r_rook_moved,
+            b_k_moved: self.board.b_k_moved,
+
+            white_turn: self.board.white_turn,
+        };
+
+        new_board.move_piece(from, to as u64, promotion);
+
         let from_protocol = 63 - from;
         let to_protocol = 63 - to;
 
@@ -40,12 +59,21 @@ impl MainState {
         let to_file = (b'A' + (to_protocol % 8) as u8) as char;
         let to_rank = (b'1' + (7 - to_protocol / 8) as u8) as char;
 
-        let mut message = format!("{}{}{}{}-", from_file, from_rank, to_file, to_rank);
+        let promotion_char = promotion.unwrap_or('-');
+
+        let mut message = format!(
+            "{}{}{}{}{}",
+            from_file,
+            from_rank,
+            to_file,
+            to_rank,
+            promotion_char
+        );
 
         for protocol_index in 0..64 {
             let board_index = 63 - protocol_index;
 
-            let piece = Board::piece_type_on_position(&self.board, board_index);
+            let piece = Board::piece_type_on_position(&new_board, board_index);
 
             let symbol = match piece {
                 -1 => '-',
@@ -109,6 +137,16 @@ impl event::EventHandler for MainState {
                 return Ok(());
             }
 
+            if message == "CHECKMATE" {
+                self.winner = Some("Du vann!");
+                return Ok(())
+            }
+
+            if message == "STALEMATE" {
+                self.winner = Some("Oavgjort!");
+                return Ok(())
+            }
+
             // opponents move
             let chars: Vec<char> = message.chars().collect();
 
@@ -127,11 +165,30 @@ impl event::EventHandler for MainState {
             let from = 63 - from_protocol;
             let to = 63 - to_protocol;
 
-            self.board.move_piece(from, to as u64, None);
-
-            self.stream
-                .write_all(b"OK\n")
-                .expect("Failed to send response");
+            if self.board.move_piece(from, to as u64, None){
+                if Board::is_mate_white(&self.board) || Board::is_mate_black(&self.board){
+                    self.winner = Some("Du förlorade!");
+                    self.stream
+                    .write_all(b"CHECKMATE\n")
+                    .expect("Failed to send response");
+                }
+                //if Board::stalemate(&self.board){
+                //    self.winner = Some("Oavgjort!");
+                //    self.stream
+                //    .write_all(b"STALEMATE\n")
+                //    .expect("Failed to send response");
+                //}
+                else{
+                    self.stream
+                    .write_all(b"OK\n")
+                    .expect("Failed to send response");
+                }
+            }
+            else{
+                self.stream
+                    .write_all(b"REJECT\n")
+                    .expect("Failed to send response");
+            }
         }
 
         Ok(())
@@ -159,17 +216,45 @@ impl event::EventHandler for MainState {
                     self.selected_square = Some(ruta);
                 }
                 Some(from) => {
-                    self.board.move_piece(from as usize, ruta as u64, None);
-                    self.send_move(from, ruta);
+
+                    let piece = Board::piece_type_on_position(&self.board, from);
+
+                    let to_rank = (63 - ruta) / 8;
+
+                    let promotion = if piece == 0 && to_rank == 0 {
+                        Some('Q')
+                    } else if piece == 6 && to_rank == 7 {
+                        Some('Q')
+                    } else {
+                        None
+                    };
+
+                    self.send_move(from, ruta, promotion);
                     self.selected_square = None;
 
-                    if Board::is_mate_white(&self.board) {
-                        self.winner = Some("Svart vann!");
-                    }
+                    let response = self.receive_message();
 
-                    if Board::is_mate_black(&self.board) {
-                        self.winner = Some("Vit vann!");
+                    if response == "REJECT" {
+                        println!("Move rejected by opponent, not playing move!");
                     }
+                    else if response == "OK" {
+                        self.board.move_piece(from as usize, ruta as u64, promotion);
+                    }
+                    else if response == "CHECKMATE" {
+                        self.board.move_piece(from as usize, ruta as u64, None);
+                        self.winner = Some("Du vann!");
+                    }
+                    else if response == "STALEMATE" {
+                        self.board.move_piece(from as usize, ruta as u64, None);
+                        self.winner = Some("Oavgjort!");
+                    }
+                    //if Board::is_mate_white(&self.board) {
+                    //    self.winner = Some("Svart vann!");
+                    //}
+//
+                    //if Board::is_mate_black(&self.board) {
+                    //    self.winner = Some("Vit vann!");
+                    //}
                 }
             }
         }
