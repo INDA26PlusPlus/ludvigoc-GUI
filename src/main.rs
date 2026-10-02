@@ -30,7 +30,7 @@ impl MainState {
         Ok(s)
     }
 
-    fn send_move(&mut self, from: usize, to: usize, promotion: Option<char>) {
+    fn send_move(&mut self, from: usize, to: usize, promotion: Option<usize>) {
 
         let mut new_board = Board {
             boards: self.board.boards,
@@ -59,7 +59,18 @@ impl MainState {
         let to_file = (b'A' + (to_protocol % 8) as u8) as char;
         let to_rank = (b'1' + (7 - to_protocol / 8) as u8) as char;
 
-        let promotion_char = promotion.unwrap_or('-');
+        let promotion_char = match promotion {
+            Some(Board::W_QUEENS) => 'Q',
+            Some(Board::W_ROOKS) => 'R',
+            Some(Board::W_KNIGHTS) => 'N',
+            Some(Board::W_BISHOPS) => 'B',
+            Some(Board::B_QUEENS) => 'q',
+            Some(Board::B_ROOKS) => 'r',
+            Some(Board::B_KNIGHTS) => 'n',
+            Some(Board::B_BISHOPS) => 'b',
+            None => '-',
+            _ => '-',
+        };
 
         let mut message = format!(
             "{}{}{}{}{}",
@@ -156,6 +167,19 @@ impl event::EventHandler for MainState {
             let to_file = chars[2];
             let to_rank = chars[3];
 
+            let promotion = match chars[4] {
+                'Q' => Some(Board::W_QUEENS),
+                'R' => Some(Board::W_ROOKS),
+                'N' => Some(Board::W_KNIGHTS),
+                'B' => Some(Board::W_BISHOPS),
+                'q' => Some(Board::B_QUEENS),
+                'r' => Some(Board::B_ROOKS),
+                'n' => Some(Board::B_KNIGHTS),
+                'b' => Some(Board::B_BISHOPS),
+                '-' => None,
+                _ => None,
+            };
+
             let from_protocol =
                 ('8' as usize - from_rank as usize) * 8 + (from_file as usize - 'A' as usize);
 
@@ -165,7 +189,7 @@ impl event::EventHandler for MainState {
             let from = 63 - from_protocol;
             let to = 63 - to_protocol;
 
-            if self.board.move_piece(from, to as u64, None){
+            if self.board.move_piece(from, to as u64, promotion) {
                 if Board::is_mate_white(&self.board) || Board::is_mate_black(&self.board){
                     self.winner = Some("Du förlorade!");
                     self.stream
@@ -221,10 +245,10 @@ impl event::EventHandler for MainState {
 
                     let to_rank = (63 - ruta) / 8;
 
-                    let promotion = if piece == 0 && to_rank == 0 {
-                        Some('Q')
-                    } else if piece == 6 && to_rank == 7 {
-                        Some('Q')
+                    let promotion = if piece == Board::W_PAWNS as isize && to_rank == 0 {
+                        Some(Board::W_QUEENS)
+                    } else if piece == Board::B_PAWNS as isize && to_rank == 7 {
+                        Some(Board::B_QUEENS)
                     } else {
                         None
                     };
