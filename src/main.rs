@@ -1,5 +1,6 @@
 mod network;
 
+use ggez::conf::WindowMode;
 use chess_library::*;
 use ggez::event;
 use ggez::glam::*;
@@ -20,6 +21,9 @@ struct MainState {
 
 impl MainState {
     fn new(board: Board, stream: TcpStream, color: char) -> GameResult<MainState> {
+
+        stream.set_nonblocking(true).expect("Could not set nonblocking!");
+
         let s = MainState {
             board,
             selected_square: None,
@@ -113,23 +117,13 @@ impl MainState {
             .expect("Failed to send move");
     }
 
-    fn receive_message(&mut self) -> String {
-        let mut message = String::new();
-        let mut buffer = [0; 1];
-
-        loop {
-            self.stream
-                .read_exact(&mut buffer)
-                .expect("Failed to receive message");
-
-            if buffer[0] == b'\n' {
-                break;
-            }
-
-            message.push(buffer[0] as char);
+    fn receive_message(&mut self) -> Option<String> {
+        let mut buffer = [0; 1024];
+        match self.stream.read(&mut buffer) {
+            Ok(0) => None,
+            Ok(n) => Some(String::from_utf8_lossy(&buffer[..n]).trim_end_matches('\n').to_string()),
+            Err(_) => None,
         }
-
-        message
     }
 }
 
@@ -138,8 +132,10 @@ impl event::EventHandler for MainState {
         if (self.board.white_turn && self.color == 'B')
             || (!self.board.white_turn && self.color == 'W')
         {
-            let message = self.receive_message();
-
+            let message = match self.receive_message() {
+                Some(msg) => msg,
+                None => return Ok(()),
+            };
             if message == "OK" {
                 return Ok(());
             }
@@ -256,7 +252,12 @@ impl event::EventHandler for MainState {
                     self.send_move(from, ruta, promotion);
                     self.selected_square = None;
 
-                    let response = self.receive_message();
+                    let response = loop {
+                        if let Some(msg) = self.receive_message() {
+                            break msg;
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(5));
+                    };
 
                     if response == "REJECT" {
                         println!("Move rejected by opponent, not playing move!");
@@ -405,7 +406,7 @@ pub fn main() -> GameResult {
 
     Board::set_standard_board(&mut board);
 
-    let cb = ggez::ContextBuilder::new("super_simple", "ggez");
+    let cb = ggez::ContextBuilder::new("super_simple", "ggez").window_mode(WindowMode::default().dimensions(560.0, 560.0));
     let (ctx, event_loop) = cb.build()?;
     let state = MainState::new(board, stream, color)?;
     event::run(ctx, event_loop, state)
